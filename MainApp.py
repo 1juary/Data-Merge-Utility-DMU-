@@ -126,7 +126,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addStretch()
 
         # 作者信息
-        footer = QLabel("Engine: Python 3.10+\nGUI: PySide6\nAuthor: Juary Wang\nEmail: gdwangjial@sunnyoptical.com")
+        footer = QLabel("Engine: Python 3.10+\nGUI: PySide6\nAuthor: Juary Wang")
         footer.setObjectName("FooterLabel")
         sidebar_layout.addWidget(footer)
 
