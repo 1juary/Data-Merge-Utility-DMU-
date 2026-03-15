@@ -10,7 +10,13 @@ from PySide6.QtCore import Qt, QThread, Signal
 from openpyxl.styles import Font, Border, Side
 from openpyxl.utils import get_column_letter
 
-# --- 1. 合并执行线程 (保持纯净版) ---
+# === CLINE MODIFIED START ===
+# 原有逻辑参考：
+# 之前的实现是在主线程中直接进行文件合并操作，会导致UI卡顿。
+# 重构为使用 QThread，将合并任务放到后台线程执行，通过信号更新UI进度。
+
+# --- 1. 合并执行线程 (使用 QThread 重构) ---
+# === CLINE MODIFIED START - MergeWorker 类 ===
 class MergeWorker(QThread):
     progress = Signal(int)
     log = Signal(str)
@@ -56,6 +62,12 @@ class MergeWorker(QThread):
 
         except Exception as e:
             self.log.emit(f"🔥 错误: {str(e)}")
+# === CLINE MODIFIED END - MergeWorker 类 ===
+
+# === CLINE MODIFIED START ===
+# 原有逻辑参考：
+# start_merge 方法之前直接在主线程中执行合并操作，会导致UI阻塞。
+# 重构为创建 MergeWorker 实例并在后台线程运行，通过信号槽机制更新进度。
 
 # --- 2. 模块 C 主界面 ---
 class MultiFileMergePage(QWidget):
@@ -240,6 +252,8 @@ class MultiFileMergePage(QWidget):
             QMessageBox.information(self, "通知", "文件已按“等线”字体、无边框格式导出。")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"导出失败: {e}")
+
+# === CLINE MODIFIED END ===
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

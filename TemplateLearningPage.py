@@ -10,7 +10,9 @@ from PySide6.QtCore import Qt, QThread, Signal
 try:
     from DataProfilingEngine import DataProfilingEngine
 except ImportError:
-    QMessageBox.critical(None, "错误", "找不到 DataProfilingEngine.py 文件，请确保它在同一目录下。")
+    # 注意：此时不能创建 QMessageBox，因为 QApplication 尚未初始化
+    # 导入失败时设为 None，稍后在运行时检查
+    DataProfilingEngine = None
 
 # --- 1. 柔和工业风 QSS ---
 STYLE_SHEET = """
