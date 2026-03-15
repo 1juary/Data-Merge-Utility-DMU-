@@ -16,10 +16,15 @@ class DataProfilingEngine:
         self.cn_holidays = holidays.CN()
 
     def profile_all(self):
-        """执行全量探查主入口"""
-        for col in self.df.columns:
+        """执行全量探查主入口 - 保持原始列顺序"""
+        # 先获取原始列顺序列表
+        columns = list(self.df.columns)
+        # 使用OrderedDict或者直接按原始顺序处理
+        for col in columns:
             self.report[col] = self._profile_column(self.df[col])
-        return self.report
+        # 返回时确保按原始列顺序返回 (使用dict保持顺序)
+        ordered_report = {col: self.report[col] for col in columns}
+        return ordered_report
 
     def _profile_column(self, series: pd.Series) -> dict:
         """单列探测逻辑 - 兼容性版本"""

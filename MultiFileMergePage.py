@@ -34,7 +34,11 @@ class MergeWorker(QThread):
             
             for i, path in enumerate(self.file_paths):
                 self.log.emit(f"正在处理: {os.path.basename(path)}")
-                df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
+                # 使用dtype=str防止日期自动转换，保持原始数据格式
+                if path.endswith('.csv'):
+                    df = pd.read_csv(path, dtype=str)
+                else:
+                    df = pd.read_excel(path, dtype=str)
                 
                 current_headers = df.columns.tolist()
                 if not set(target_headers).issubset(set(current_headers)):
@@ -42,6 +46,7 @@ class MergeWorker(QThread):
                     self.log.emit(f"❌ 错误: {os.path.basename(path)} 缺少列: {missing_cols}")
                     continue
                 
+                # 按照模板的headers顺序重排列（严格保持原始顺序，禁止排序）
                 df = df[target_headers]
                 for col, settings in self.template_config["column_settings"].items():
                     if settings["null_policy"] == "删除空值行":

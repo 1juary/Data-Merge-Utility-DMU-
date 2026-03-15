@@ -1,21 +1,13 @@
 {
     "headers": [
         "Items",
-        "优先级",
-        "具体描述",
         "日期",
-        "负责人"
+        "负责人",
+        "具体描述",
+        "优先级"
     ],
     "column_settings": {
         "Items": {
-            "null_policy": "保留空值",
-            "duplicate_policy": "保留重复"
-        },
-        "优先级": {
-            "null_policy": "保留空值",
-            "duplicate_policy": "保留重复"
-        },
-        "具体描述": {
             "null_policy": "保留空值",
             "duplicate_policy": "保留重复"
         },
@@ -24,6 +16,14 @@
             "duplicate_policy": "保留重复"
         },
         "负责人": {
+            "null_policy": "保留空值",
+            "duplicate_policy": "保留重复"
+        },
+        "具体描述": {
+            "null_policy": "保留空值",
+            "duplicate_policy": "保留重复"
+        },
+        "优先级": {
             "null_policy": "保留空值",
             "duplicate_policy": "保留重复"
         }

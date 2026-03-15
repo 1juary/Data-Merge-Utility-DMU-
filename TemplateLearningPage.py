@@ -128,11 +128,11 @@ class TemplateLearningPage(QWidget):
             self.status_label.setText("正在读取文件并探查特征...")
             self.btn_import.setEnabled(False) # 防止重复点击
             
-            # 读取数据样本
+            # 读取数据样本 - 使用dtype=str防止日期自动转换，保持原始数据格式
             if file_path.endswith('.csv'):
-                self.current_df = pd.read_csv(file_path, nrows=500)
+                self.current_df = pd.read_csv(file_path, nrows=500, dtype=str)
             else:
-                self.current_df = pd.read_excel(file_path, nrows=500)
+                self.current_df = pd.read_excel(file_path, nrows=500, dtype=str)
             
             # 开启异步探查
             self.worker = ProfilingWorker(self.current_df)
@@ -145,56 +145,65 @@ class TemplateLearningPage(QWidget):
             self.status_label.setText("导入失败")
 
     def update_table_ui(self, report):
-        """接收分析报告并渲染界面"""
-        columns = list(report.keys())
-        self.table.setColumnCount(len(columns))
-        self.table.setHorizontalHeaderLabels(columns)
+            """接收分析报告并渲染界面 - 修复顺序对齐"""
+            # 1. 关键修改：不再直接取 report.keys()，而是取原始 df 的列顺序
+            # 这样能保证界面上的表格列和 Excel 里的列顺序一模一样
+            if self.current_df is not None:
+                columns = list(self.current_df.columns)
+            else:
+                columns = list(report.keys())
 
-        for i, col_name in enumerate(columns):
-            data = report[col_name]
-            
-            # 第一行：标题项 (居中展示)
-            item_title = QTableWidgetItem(col_name)
-            item_title.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(0, i, item_title)
-            
-            # 第二行：健康度报告 (富文本感展示)
-            stats = data['stats']
-            health_info = (
-                f"数据类型: {data['inferred_type']}\n"
-                f"空值占比: {stats['null_ratio']}\n"
-                f"唯一值数: {stats['unique_count']}"
-            )
-            item_health = QTableWidgetItem(health_info)
-            item_health.setFlags(Qt.ItemIsEnabled) # 设为只读
-            self.table.setItem(1, i, item_health)
-            
-            # 第三行：清洗策略配置面板
-            config_panel = QWidget()
-            panel_layout = QVBoxLayout(config_panel)
-            panel_layout.setContentsMargins(10, 10, 10, 10)
-            
-            l1 = QLabel("空值策略:")
-            l1.setStyleSheet("font-size: 11px; color: #70A1FF;")
-            cb_null = QComboBox()
-            cb_null.addItems(["保留空值", "删除空值行", "填充默认值"])
-            
-            l2 = QLabel("重复策略:")
-            l2.setStyleSheet("font-size: 11px; color: #70A1FF;")
-            cb_dup = QComboBox()
-            cb_dup.addItems(["保留重复", "仅留首行"])
-            
-            panel_layout.addWidget(l1)
-            panel_layout.addWidget(cb_null)
-            panel_layout.addSpacing(8)
-            panel_layout.addWidget(l2)
-            panel_layout.addWidget(cb_dup)
-            
-            self.table.setCellWidget(2, i, config_panel)
+            self.table.setColumnCount(len(columns))
+            self.table.setHorizontalHeaderLabels(columns)
 
-        self.btn_import.setEnabled(True)
-        self.btn_save.setEnabled(True)
-        self.status_label.setText(f"分析完成！共计 {len(columns)} 个字段")
+            for i, col_name in enumerate(columns):
+                # 2. 从 report 中按正确的 col_name 取出数据
+                data = report.get(col_name)
+                if not data:
+                    continue
+                
+                # 第一行：标题项 (居中展示)
+                item_title = QTableWidgetItem(col_name)
+                item_title.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(0, i, item_title)
+                
+                # 第二行：健康度报告
+                stats = data['stats']
+                health_info = (
+                    f"数据类型: {data['inferred_type']}\n"
+                    f"空值占比: {stats['null_ratio']}\n"
+                    f"唯一值数: {stats['unique_count']}"
+                )
+                item_health = QTableWidgetItem(health_info)
+                item_health.setFlags(Qt.ItemIsEnabled) 
+                self.table.setItem(1, i, item_health)
+                
+                # 第三行：清洗策略配置面板
+                config_panel = QWidget()
+                panel_layout = QVBoxLayout(config_panel)
+                panel_layout.setContentsMargins(10, 10, 10, 10)
+                
+                l1 = QLabel("空值策略:")
+                l1.setStyleSheet("font-size: 11px; color: #70A1FF;")
+                cb_null = QComboBox()
+                cb_null.addItems(["保留空值", "删除空值行", "填充默认值"])
+                
+                l2 = QLabel("重复策略:")
+                l2.setStyleSheet("font-size: 11px; color: #70A1FF;")
+                cb_dup = QComboBox()
+                cb_dup.addItems(["保留重复", "仅留首行"])
+                
+                panel_layout.addWidget(l1)
+                panel_layout.addWidget(cb_null)
+                panel_layout.addSpacing(8)
+                panel_layout.addWidget(l2)
+                panel_layout.addWidget(cb_dup)
+                
+                self.table.setCellWidget(2, i, config_panel)
+
+            self.btn_import.setEnabled(True)
+            self.btn_save.setEnabled(True)
+            self.status_label.setText(f"分析完成！共计 {len(columns)} 个字段")
 
     def save_template_json(self):
         """将界面配置导出为标准 JSON"""
@@ -215,7 +224,7 @@ class TemplateLearningPage(QWidget):
             
         try:
             with open("模板.json", "w", encoding="utf-8") as f:
-                json.dump(template_config, f, indent=4, ensure_ascii=False)
+                json.dump(template_config, f, indent=4, ensure_ascii=False,sort_keys=False)
             QMessageBox.information(self, "导出成功", "配置已持久化为 模板.json")
         except Exception as e:
             QMessageBox.warning(self, "保存失败", f"无法写入文件: {e}")
