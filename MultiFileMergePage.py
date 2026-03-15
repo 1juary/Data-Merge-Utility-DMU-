@@ -38,7 +38,12 @@ class MergeWorker(QThread):
                 if path.endswith('.csv'):
                     df = pd.read_csv(path, dtype=str)
                 else:
-                    df = pd.read_excel(path, dtype=str)
+                    df = pd.read_excel(
+                        path, 
+                        dtype=str,
+                        keep_default_na=False,  # 不自动转换空值为 NaN
+                        engine='openpyxl'
+                        )
                 
                 current_headers = df.columns.tolist()
                 if not set(target_headers).issubset(set(current_headers)):
@@ -62,6 +67,7 @@ class MergeWorker(QThread):
                 return
 
             final_df = pd.concat(all_dfs, ignore_index=True)
+            # final_df = final_df[target_headers]
             self.log.emit(f"✅ 合并完成，共计 {len(final_df)} 行。")
             self.task_finished.emit(final_df)
 

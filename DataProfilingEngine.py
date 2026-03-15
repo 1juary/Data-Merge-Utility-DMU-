@@ -98,7 +98,7 @@ class DataProfilingEngine:
             if sample.empty: return None
             for s in sample:
                 parse(s)
-            return pd.to_datetime(series, errors='coerce')
+            return pd.to_datetime(series, errors='coerce', dtype=str)
         except Exception:
             return None
 
