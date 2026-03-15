@@ -1,33 +1,51 @@
+import os
 import pandas as pd
 import numpy as np
 from dateutil.parser import parse
 import holidays
-from rapidfuzz import process
+from rapidfuzz import process, fuzz
 from scipy import stats
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class DataProfilingEngine:
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame, max_workers: int = None):
         self.df = df.copy()
         self.report = {}
         # 预定义空值占位符
         self.null_placeholders = ['N/A', 'NULL', '-', 'nan', 'null', '']
         # 节假日查找器 (默认中国)
         self.cn_holidays = holidays.CN()
+        # 并行处理的工作线程数，默认使用 CPU 核心数
+        self.max_workers = max_workers or min(8, (os.cpu_count() or 1) + 4)
 
     def profile_all(self):
-        """执行全量探查主入口 - 保持原始列顺序"""
-        # 先获取原始列顺序列表
+        """执行全量探查主入口 - 使用并行处理加速"""
         columns = list(self.df.columns)
-        # 使用OrderedDict或者直接按原始顺序处理
-        for col in columns:
-            self.report[col] = self._profile_column(self.df[col])
-        # 返回时确保按原始列顺序返回 (使用dict保持顺序)
+        
+        # 使用 ThreadPoolExecutor 并行处理各列
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # 提交所有列的分析任务
+            future_to_col = {
+                executor.submit(self._profile_column, self.df[col]): col 
+                for col in columns
+            }
+            
+            # 收集结果
+            for future in as_completed(future_to_col):
+                col = future_to_col[future]
+                try:
+                    self.report[col] = future.result()
+                except Exception as e:
+                    print(f"列 {col} 分析失败: {e}")
+                    self.report[col] = {"error": str(e)}
+        
+        # 按原始列顺序返回
         ordered_report = {col: self.report[col] for col in columns}
         return ordered_report
 
     def _profile_column(self, series: pd.Series) -> dict:
-        """单列探测逻辑 - 兼容性版本"""
+        """单列探测逻辑 - 优化版本"""
         total_count = len(series)
         # 将占位符统一替换为 NaN
         cleaned_series = series.replace(self.null_placeholders, np.nan)
@@ -70,10 +88,10 @@ class DataProfilingEngine:
                     col_report["inferred_type"] = "Categorical"
                     col_report["details"] = self._profile_categorical(cleaned_series, unique_values)
                 
-                # Level 5: String/Object
+                # Level 5: String/Object - 使用优化后的方法
                 else:
                     col_report["inferred_type"] = "String"
-                    col_report.update(self._profile_string(cleaned_series, unique_values))
+                    col_report.update(self._profile_string_optimized(cleaned_series, unique_values))
 
         return col_report
 
@@ -127,7 +145,63 @@ class DataProfilingEngine:
             "holiday_ratio": f"{(holiday_count / len(valid_dates)):.2%}"
         }
 
+    def _profile_string_optimized(self, series, unique_vals) -> dict:
+        """
+        优化版的字符串分析 - 使用更快的模糊匹配算法
+        优化点：
+        1. 限制采样数量（只取前50个）
+        2. 使用更高效的匹配算法
+        3. 减少比较次数
+        """
+        suggestions = []
+        unique_count = len(unique_vals)
+        
+        # 只有在唯一值数量合理时才进行分析
+        if 1 < unique_count <= 500:
+            # 采样限制为50个，避免 O(n²) 爆炸
+            sample_size = min(50, unique_count)
+            sample_vals = [str(x).strip() for x in unique_vals[:sample_size]]
+            
+            # 使用更快的 cdist 进行批量匹配
+            if len(sample_vals) > 1:
+                try:
+                    # 使用 rapidfuzz 的 cdist 进行批量计算，比逐个 extract 快很多
+                    from rapidfuzz.distance import cdist
+                    
+                    # 计算所有对的相似度矩阵
+                    scores = cdist(sample_vals, sample_vals, scorer=fuzz.ratio, workers=-1)
+                    
+                    # 找出高相似度对（但排除自己跟自己的比较）
+                    for i in range(len(sample_vals)):
+                        for j in range(i + 1, len(sample_vals)):
+                            if scores[i][j] >= 90:  # 相似度阈值
+                                suggestions.append(f"建议合并: '{sample_vals[i]}' 与 '{sample_vals[j]}'")
+                                if len(suggestions) >= 3:
+                                    break
+                        if len(suggestions) >= 3:
+                            break
+                except Exception as e:
+                    # 如果 cdist 失败，回退到原来的方法（但限制规模）
+                    suggestions = self._profile_string_fallback(sample_vals)
+        elif unique_count > 500:
+            # 唯一值太多，跳过模糊匹配（这通常是自由文本字段）
+            pass
+            
+        return {"fuzzy_suggestions": suggestions[:3]}
+
+    def _profile_string_fallback(self, sample_vals) -> list:
+        """回退方案：使用原方法但限制规模"""
+        suggestions = []
+        for i, val in enumerate(sample_vals):
+            if len(suggestions) >= 3:
+                break
+            matches = process.extract(val, sample_vals[i+1:], score_cutoff=90, limit=1)
+            for m in matches:
+                suggestions.append(f"建议合并: '{val}' 与 '{m[0]}'")
+        return suggestions
+
     def _profile_string(self, series, unique_vals) -> dict:
+        """原版字符串分析 - 保留兼容性"""
         suggestions = []
         if 1 < len(unique_vals) < 1000:
             sample_vals = [str(x).strip() for x in unique_vals[:100]]
