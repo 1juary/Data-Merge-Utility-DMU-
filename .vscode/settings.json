@@ -11,5 +11,5 @@
         }
     },
     "terminal.integrated.enableMultiLinePasteWarning": false,
-    "python.defaultInterpreterPath": "python"
+    // "python.defaultInterpreterPath": "python" //Use the system's default Python interpreter
 }

@@ -1,0 +1,21 @@
+# 忽略 Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 忽略虚拟环境 (非常重要！)
+.venv/
+venv/
+ENV/
+
+# 忽略 VS Code 配置（如果你不想把自己的编辑器设置传给别人）
+.vscode/
+
+# 忽略打包生成的文件夹
+dist/
+build/
+*.egg-info/
+
+# 忽略临时文件
+.DS_Store
+Thumbs.db
